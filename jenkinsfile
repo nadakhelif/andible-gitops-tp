@@ -1,0 +1,112 @@
+pipeline {
+    agent any
+    environment {
+        AZURE_SUBSCRIPTION_ID = '5c28f73e-716d-4a4e-b933-3aeb53ae8cca'
+        AZURE_TENANT_ID = credentials('azure-tenant-id')
+        AZURE_CLIENT_ID = credentials('azure-client-id')  
+        AZURE_CLIENT_SECRET = credentials('azure-client-secret')
+        VM_IP = '40.71.59.194'
+        SSH_KEY_PATH = 'C:/Users/Nada/OneDrive/Desktop/gl5/deploiment2/gitops-ansible-tp/.ssh/id_rsa_azure'
+    }
+
+     stages {
+        stage('Fix SSH Key Permissions') {
+            steps {
+                script {
+                    // Remove inheritance and grant full control only to the current user
+                    bat """
+                        icacls "%SSH_KEY_PATH%" /inheritance:r
+                        icacls "%SSH_KEY_PATH%" /grant:r "%USERNAME%":(F)
+                    """
+                }
+            }
+        }
+
+        stage('Prepare Ansible Inventory') {
+            steps {
+                script {
+                    dir('ansible') {
+                        writeFile file: 'inventory.ini', text: """[web]
+${env.VM_IP} ansible_ssh_user=azureuser ansible_ssh_private_key_file=${env.SSH_KEY_PATH}"""
+                    }
+                }
+            }
+        }
+
+        stage('Test SSH Connection') {
+            steps {
+                script {
+                    timeout(time: 2, unit: 'MINUTES') {
+                        // Use -v flag for verbose output to help diagnose issues
+                        bat """
+                            echo Testing SSH connection to ${env.VM_IP}...
+                            ssh -v -o StrictHostKeyChecking=no -i "%SSH_KEY_PATH%" azureuser@%VM_IP% "echo Connected successfully"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Copy Ansible Files to VM') {
+            steps {
+                script {
+                    // Create ansible directory structure on VM
+                    bat """
+                        ssh -i "%SSH_KEY_PATH%" azureuser@%VM_IP% "mkdir -p ~/ansible/roles/nginx ~/ansible/roles/common"
+                    """
+                    
+                    // Copy roles and playbook to VM
+                    bat """
+                        scp -r -i "%SSH_KEY_PATH%" ansible/roles/nginx/* azureuser@%VM_IP%:~/ansible/roles/nginx/
+                        scp -r -i "%SSH_KEY_PATH%" ansible/roles/common/* azureuser@%VM_IP%:~/ansible/roles/common/
+                        scp -i "%SSH_KEY_PATH%" ansible/playbook.yml azureuser@%VM_IP%:~/ansible/
+                        scp -i "%SSH_KEY_PATH%" ansible/inventory.ini azureuser@%VM_IP%:~/ansible/
+                    """
+                }
+            }
+        }
+
+        stage('Install Ansible on VM') {
+            steps {
+                script {
+                    bat """
+                        ssh -i "%SSH_KEY_PATH%" azureuser@%VM_IP% "sudo apt-get update && \
+                        sudo apt-get install -y software-properties-common && \
+                        sudo apt-add-repository --yes --update ppa:ansible/ansible && \
+                        sudo apt-get install -y ansible"
+                    """
+                }
+            }
+        }
+
+        stage('Run Ansible Playbook') {
+            steps {
+                script {
+                    bat """
+                        ssh -i "%SSH_KEY_PATH%" azureuser@%VM_IP% "cd ~/ansible && \
+                        ansible-playbook -i inventory.ini playbook.yml"
+                    """
+                }
+            }
+        }
+
+        stage('Verify Nginx') {
+            steps {
+                script {
+                    bat """
+                        ssh -i "%SSH_KEY_PATH%" azureuser@%VM_IP% "curl http://localhost"
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline completed successfully. Nginx should be running on http://${env.VM_IP}"
+        }
+        cleanup {
+            cleanWs()
+        }
+    }
+}

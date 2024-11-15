@@ -1,0 +1,14 @@
+- name: Idempotent Ansible TP
+  hosts: web
+  tasks:
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+      become: true
+
+    - name: Ensure index.html exists
+      copy:
+        content: "Welcome to Nginx!"
+        dest: /var/www/html/index.html
+      become: true
