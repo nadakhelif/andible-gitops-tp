@@ -1,22 +1,19 @@
 pipeline {
     agent any
+
     environment {
-        AZURE_SUBSCRIPTION_ID = '5c28f73e-716d-4a4e-b933-3aeb53ae8cca'
-        AZURE_TENANT_ID = credentials('azure-tenant-id')
-        AZURE_CLIENT_ID = credentials('azure-client-id')  
-        AZURE_CLIENT_SECRET = credentials('azure-client-secret')
-        VM_IP = '40.71.59.194'
-        SSH_KEY_PATH = '"C:/Users/Nada/.ssh/new_azure_key"'
+        VM_IP = '40.71.59.194'  // Set your VM's IP address
     }
 
-     stages {
-        
+    stages {
         stage('Prepare Ansible Inventory') {
             steps {
                 script {
                     dir('ansible') {
-                        writeFile file: 'inventory.ini', text: """[web]
-${env.VM_IP} ansible_ssh_user=azureuser ansible_ssh_private_key_file=${env.SSH_KEY_PATH}"""
+                        withCredentials([string(credentialsId: 'ssh-private-key', variable: 'SSH_PRIVATE_KEY')]) {
+                            writeFile file: 'inventory.ini', text: """[web]
+${env.VM_IP} ansible_ssh_user=azureuser ansible_ssh_private_key_file=${env.SSH_PRIVATE_KEY}"""
+                        }
                     }
                 }
             }
@@ -27,10 +24,12 @@ ${env.VM_IP} ansible_ssh_user=azureuser ansible_ssh_private_key_file=${env.SSH_K
                 script {
                     timeout(time: 2, unit: 'MINUTES') {
                         // Use -v flag for verbose output to help diagnose issues
-                        bat """
-                            echo Testing SSH connection to ${env.VM_IP}...
-                            ssh -v -o StrictHostKeyChecking=no -i "C:/Users/Nada/.ssh/new_azure_key" azureuser@40.71.59.194 "echo Connected successfully"
-                        """
+                        withCredentials([string(credentialsId: 'ssh-private-key', variable: 'SSH_PRIVATE_KEY')]) {
+                            bat """
+                                echo Testing SSH connection to ${env.VM_IP}...
+                                ssh -v -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i <(echo "${SSH_PRIVATE_KEY}") azureuser@${VM_IP} "echo Connected successfully"
+                            """
+                        }
                     }
                 }
             }
@@ -40,17 +39,21 @@ ${env.VM_IP} ansible_ssh_user=azureuser ansible_ssh_private_key_file=${env.SSH_K
             steps {
                 script {
                     // Create ansible directory structure on VM
-                    bat """
-                        ssh -i "%SSH_KEY_PATH%" azureuser@%VM_IP% "mkdir -p ~/ansible/roles/nginx ~/ansible/roles/common"
-                    """
-                    
+                    withCredentials([string(credentialsId: 'ssh-private-key', variable: 'SSH_PRIVATE_KEY')]) {
+                        bat """
+                            ssh -i <(echo "${SSH_PRIVATE_KEY}") azureuser@${VM_IP} "mkdir -p ~/ansible/roles/nginx ~/ansible/roles/common"
+                        """
+                    }
+
                     // Copy roles and playbook to VM
-                    bat """
-                        scp -r -i "%SSH_KEY_PATH%" ansible/roles/nginx/* azureuser@%VM_IP%:~/ansible/roles/nginx/
-                        scp -r -i "%SSH_KEY_PATH%" ansible/roles/common/* azureuser@%VM_IP%:~/ansible/roles/common/
-                        scp -i "%SSH_KEY_PATH%" ansible/playbook.yml azureuser@%VM_IP%:~/ansible/
-                        scp -i "%SSH_KEY_PATH%" ansible/inventory.ini azureuser@%VM_IP%:~/ansible/
-                    """
+                    withCredentials([string(credentialsId: 'ssh-private-key', variable: 'SSH_PRIVATE_KEY')]) {
+                        bat """
+                            scp -r -i <(echo "${SSH_PRIVATE_KEY}") ansible/roles/nginx/* azureuser@${VM_IP}:~/ansible/roles/nginx/
+                            scp -r -i <(echo "${SSH_PRIVATE_KEY}") ansible/roles/common/* azureuser@${VM_IP}:~/ansible/roles/common/
+                            scp -i <(echo "${SSH_PRIVATE_KEY}") ansible/playbook.yml azureuser@${VM_IP}:~/ansible/
+                            scp -i <(echo "${SSH_PRIVATE_KEY}") ansible/inventory.ini azureuser@${VM_IP}:~/ansible/
+                        """
+                    }
                 }
             }
         }
@@ -58,12 +61,14 @@ ${env.VM_IP} ansible_ssh_user=azureuser ansible_ssh_private_key_file=${env.SSH_K
         stage('Install Ansible on VM') {
             steps {
                 script {
-                    bat """
-                        ssh -i "%SSH_KEY_PATH%" azureuser@%VM_IP% "sudo apt-get update && \
-                        sudo apt-get install -y software-properties-common && \
-                        sudo apt-add-repository --yes --update ppa:ansible/ansible && \
-                        sudo apt-get install -y ansible"
-                    """
+                    withCredentials([string(credentialsId: 'ssh-private-key', variable: 'SSH_PRIVATE_KEY')]) {
+                        bat """
+                            ssh -i <(echo "${SSH_PRIVATE_KEY}") azureuser@${VM_IP} "sudo apt-get update && \
+                            sudo apt-get install -y software-properties-common && \
+                            sudo apt-add-repository --yes --update ppa:ansible/ansible && \
+                            sudo apt-get install -y ansible"
+                        """
+                    }
                 }
             }
         }
@@ -71,10 +76,12 @@ ${env.VM_IP} ansible_ssh_user=azureuser ansible_ssh_private_key_file=${env.SSH_K
         stage('Run Ansible Playbook') {
             steps {
                 script {
-                    bat """
-                        ssh -i "%SSH_KEY_PATH%" azureuser@%VM_IP% "cd ~/ansible && \
-                        ansible-playbook -i inventory.ini playbook.yml"
-                    """
+                    withCredentials([string(credentialsId: 'ssh-private-key', variable: 'SSH_PRIVATE_KEY')]) {
+                        bat """
+                            ssh -i <(echo "${SSH_PRIVATE_KEY}") azureuser@${VM_IP} "cd ~/ansible && \
+                            ansible-playbook -i inventory.ini playbook.yml"
+                        """
+                    }
                 }
             }
         }
@@ -82,9 +89,11 @@ ${env.VM_IP} ansible_ssh_user=azureuser ansible_ssh_private_key_file=${env.SSH_K
         stage('Verify Nginx') {
             steps {
                 script {
-                    bat """
-                        ssh -i "%SSH_KEY_PATH%" azureuser@%VM_IP% "curl http://localhost"
-                    """
+                    withCredentials([string(credentialsId: 'ssh-private-key', variable: 'SSH_PRIVATE_KEY')]) {
+                        bat """
+                            ssh -i <(echo "${SSH_PRIVATE_KEY}") azureuser@${VM_IP} "curl http://localhost"
+                        """
+                    }
                 }
             }
         }
