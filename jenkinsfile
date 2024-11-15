@@ -6,22 +6,11 @@ pipeline {
         AZURE_CLIENT_ID = credentials('azure-client-id')  
         AZURE_CLIENT_SECRET = credentials('azure-client-secret')
         VM_IP = '40.71.59.194'
-        SSH_KEY_PATH = 'C:/Users/Nada/OneDrive/Desktop/gl5/deploiment3/gitops-ansible-tp/.ssh/id_rsa_azure'
+        SSH_KEY_PATH = '"C:/Users/Nada/.ssh/new_azure_key"'
     }
 
      stages {
-        stage('Fix SSH Key Permissions') {
-            steps {
-                script {
-                    // Remove inheritance and grant full control only to the current user
-                    bat """
-                        icacls "%SSH_KEY_PATH%" /inheritance:r
-                        icacls "%SSH_KEY_PATH%" /grant:r "%USERNAME%":(F)
-                    """
-                }
-            }
-        }
-
+        
         stage('Prepare Ansible Inventory') {
             steps {
                 script {
