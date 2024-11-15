@@ -10,14 +10,14 @@ resource "tls_private_key" "ssh" {
 # Store private key in a file
 resource "local_file" "private_key" {
   content         = tls_private_key.ssh.private_key_pem
-  filename        = "C:/Users/Nada/OneDrive/Desktop/gl5/deploiment2/gitops-ansible-tp/.ssh/id_rsa_azure"
+  filename        = "C:/Users/Nada/OneDrive/Desktop/gl5/deploiment3/gitops-ansible-tp/.ssh/id_rsa_azure"
   file_permission = "0600"
 }
 
 # Store public key in a file
 resource "local_file" "public_key" {
   content         = tls_private_key.ssh.public_key_openssh
-  filename        = "C:/Users/Nada/OneDrive/Desktop/gl5/deploiment2/gitops-ansible-tp/.ssh/id_rsa_azure.pub"
+  filename        = "C:/Users/Nada/OneDrive/Desktop/gl5/deploiment3/gitops-ansible-tp/.ssh/id_rsa_azure.pub"
   file_permission = "0644"
 }
 

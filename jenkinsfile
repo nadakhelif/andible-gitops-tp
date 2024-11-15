@@ -6,7 +6,7 @@ pipeline {
         AZURE_CLIENT_ID = credentials('azure-client-id')  
         AZURE_CLIENT_SECRET = credentials('azure-client-secret')
         VM_IP = '40.71.59.194'
-        SSH_KEY_PATH = 'C:/Users/Nada/OneDrive/Desktop/gl5/deploiment2/gitops-ansible-tp/.ssh/id_rsa_azure'
+        SSH_KEY_PATH = 'C:/Users/Nada/OneDrive/Desktop/gl5/deploiment3/gitops-ansible-tp/.ssh/id_rsa_azure'
     }
 
      stages {
